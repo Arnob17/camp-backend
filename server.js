@@ -310,8 +310,8 @@ app.get("/api/food/scout/:scoutId", authenticateToken, async (req, res) => {
   }
 });
 
-// Serve React app for all other routes
-app.get("/*", (req, res) => {
+// Serve React app for all other routes (must be last)
+app.get("/:catchAll(*)", (req, res) => {
   res.sendFile(path.join(__dirname, "../dist", "index.html"));
 });
 
