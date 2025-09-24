@@ -311,8 +311,9 @@ app.get("/api/food/scout/:scoutId", authenticateToken, async (req, res) => {
 });
 
 // Serve React app for all other routes (must be last)
-app.get("/:catchAll(*)", (req, res) => {
-  res.sendFile(path.join(__dirname, "../dist", "index.html"));
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api")) return next(); // skip API
+  res.send("hello world");
 });
 
 app.listen(PORT, () => {
