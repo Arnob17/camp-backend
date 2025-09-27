@@ -30,13 +30,21 @@ const createTables = () => {
   const createScoutsTable = db.prepare(`
     CREATE TABLE IF NOT EXISTS scouts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE,
+    bsID TEXT NOT NULL,
     password TEXT NOT NULL,
+    unitName TEXT NOT NULL,
     name TEXT NOT NULL,
-    age INTEGER,
-    phone TEXT,
+    name_bangla TEXT NOT NULL,
+    age TEXT NOT NULL,
+    fatherName TEXT NOT NULL,
+    motherName TEXT NOT NULL,
+    address TEXT NOT NULL,
+    bloodGroup TEXT NOT NULL,
+    phone TEXT NOT NULL,
     emergency_contact TEXT,
     image_url TEXT,
+    payment_amount TEXT NOT NULL,
     scout_type TEXT DEFAULT 'scout',
     registered_by INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -112,19 +120,27 @@ const dbOps = {
   // Scout operations
   createScout: (scoutData, adminId) => {
     const stmt = db.prepare(`
-    INSERT INTO scouts (email, password, name, age, phone, emergency_contact, image_url, scout_type, registered_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO scouts (email, password, name, name_bangla, age, bsID, unitName, fatherName, motherName, address, bloodGroup,  phone, emergency_contact, image_url, scout_type, payment_amount,  registered_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
     return stmt.run(
       scoutData.email,
       scoutData.password, // Make sure to hash this password
       scoutData.name,
+      scoutData.name_bangla,
       scoutData.age || null,
+      scoutData.bsID,
+      scoutData.unitName,
+      scoutData.fatherName,
+      scoutData.motherName,
+      scoutData.address,
+      scoutData.bloodGroup,
       scoutData.phone || null,
       scoutData.emergency_contact || null,
       scoutData.image_url || null,
       scoutData.scout_type || "scout", // Default to 'scout' if not provided
+      scoutData.paymentAmount,
       adminId
     );
   },
@@ -132,16 +148,117 @@ const dbOps = {
   // And update the scout retrieval to include scout_type
   getAllScouts: () => {
     const stmt = db.prepare(`
-    SELECT id, email, name, age, phone, emergency_contact, image_url, scout_type, created_at 
-    FROM scouts 
+    SELECT 
+      id,
+      email,
+      bsID,
+      unitName,
+      name,
+      name_bangla,
+      age,
+      fatherName,
+      motherName,
+      address,
+      bloodGroup,
+      phone,
+      emergency_contact,
+      image_url,
+      scout_type,
+      registered_by,
+      payment_amount,
+      created_at
+    FROM scouts
     ORDER BY created_at DESC
   `);
     return stmt.all();
   },
 
+  // In your database.js file, add this to dbOps object:
+
+  // Update scout information
+  updateScout: (scoutId, scoutData) => {
+    const stmt = db.prepare(`
+    UPDATE scouts 
+    SET 
+      email = ?, 
+      bsID = ?, 
+      unitName = ?, 
+      name = ?, 
+      name_bangla = ?, 
+      age = ?, 
+      fatherName = ?, 
+      motherName = ?, 
+      address = ?, 
+      bloodGroup = ?, 
+      phone = ?, 
+      emergency_contact = ?, 
+      image_url = ?, 
+      payment_amount = ?,
+      scout_type = ?
+    WHERE id = ?
+  `);
+
+    return stmt.run(
+      scoutData.email,
+      scoutData.bsID,
+      scoutData.unitName,
+      scoutData.name,
+      scoutData.name_bangla,
+      scoutData.age || null,
+      scoutData.fatherName,
+      scoutData.motherName,
+      scoutData.address,
+      scoutData.bloodGroup,
+      scoutData.phone || null,
+      scoutData.emergency_contact || null,
+      scoutData.image_url || null,
+      scoutData.payment_amount,
+      scoutData.scout_type || "scout",
+      scoutId
+    );
+  },
+
+  // Get scout by ID (useful for update operations)
+  getScoutById: (scoutId) => {
+    const stmt = db.prepare(`
+    SELECT 
+      id,
+      email,
+      bsID,
+      unitName,
+      name,
+      name_bangla,
+      age,
+      fatherName,
+      motherName,
+      address,
+      bloodGroup,
+      phone,
+      emergency_contact,
+      image_url,
+      scout_type,
+      payment_amount,
+      registered_by,
+      created_at
+    FROM scouts 
+    WHERE id = ?
+  `);
+    return stmt.get(scoutId);
+  },
+
   findScoutByEmail: (email) => {
     const stmt = db.prepare("SELECT * FROM scouts WHERE email = ?");
     return stmt.get(email);
+  },
+
+  deleteScoutById: (scoutId) => {
+    // First delete related food entries to maintain referential integrity
+    const deleteFoodStmt = db.prepare("DELETE FROM food WHERE scout_id = ?");
+    deleteFoodStmt.run(scoutId);
+
+    // Then delete the scout
+    const deleteScoutStmt = db.prepare("DELETE FROM scouts WHERE id = ?");
+    return deleteScoutStmt.run(scoutId);
   },
 
   // Camp operations

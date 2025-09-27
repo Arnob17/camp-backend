@@ -107,7 +107,7 @@ app.post("/api/scout/register", authenticateToken, async (req, res) => {
 
     const scoutData = req.body;
 
-    if (!scoutData.email || !scoutData.password || !scoutData.name) {
+    if (!scoutData.password || !scoutData.name) {
       return res
         .status(400)
         .json({ error: "Email, password, and name are required" });
@@ -131,6 +131,8 @@ app.post("/api/scout/register", authenticateToken, async (req, res) => {
         name: scoutData.name,
       },
     });
+
+    console.log(result);
   } catch (error) {
     console.error("Scout registration error:", error);
     res.status(500).json({ error: "Internal server error" });
@@ -171,6 +173,45 @@ app.post("/api/scout/login", async (req, res) => {
   }
 });
 
+app.delete("/api/scouts/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Only admins can delete scouts" });
+    }
+
+    const scoutId = parseInt(req.params.id);
+
+    if (isNaN(scoutId) || scoutId <= 0) {
+      return res.status(400).json({ error: "Invalid scout ID" });
+    }
+
+    // Optional: Check if scout exists before deletion
+    // const scoutExists = dbOps
+    //   .prepare("SELECT id FROM scouts WHERE id = ?")
+    //   .get(scoutId);
+    // if (!scoutExists) {
+    //   return res.status(404).json({ error: "Scout not found" });
+    // }
+
+    const result = dbOps.deleteScoutById(scoutId);
+
+    if (result.changes === 0) {
+      return res
+        .status(404)
+        .json({ error: "Scout not found or already deleted" });
+    }
+
+    res.json({
+      message: "Scout deleted successfully",
+      deletedId: scoutId,
+      changes: result.changes,
+    });
+  } catch (error) {
+    console.error("Delete scout error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 app.get("/api/scouts", authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== "admin") {
@@ -181,6 +222,118 @@ app.get("/api/scouts", authenticateToken, async (req, res) => {
     res.json(scouts);
   } catch (error) {
     console.error("Get scouts error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.put("/api/scouts/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Only admins can update scouts" });
+    }
+
+    const scoutId = parseInt(req.params.id);
+
+    if (isNaN(scoutId) || scoutId <= 0) {
+      return res.status(400).json({ error: "Invalid scout ID" });
+    }
+
+    // Check if scout exists
+    const existingScout = dbOps.getScoutById(scoutId);
+    if (!existingScout) {
+      return res.status(404).json({ error: "Scout not found" });
+    }
+
+    const updateData = req.body;
+
+    // Basic validation
+    if (!updateData.email || !updateData.name) {
+      return res.status(400).json({ error: "Email and name are required" });
+    }
+
+    // Check if email is already taken by another scout
+    if (updateData.email !== existingScout.email) {
+      const scoutWithEmail = dbOps.findScoutByEmail(updateData.email);
+      if (scoutWithEmail && scoutWithEmail.id !== scoutId) {
+        return res
+          .status(409)
+          .json({ error: "Email already taken by another scout" });
+      }
+    }
+
+    const result = dbOps.updateScout(scoutId, updateData);
+
+    if (result.changes === 0) {
+      return res
+        .status(404)
+        .json({ error: "Scout not found or no changes made" });
+    }
+
+    // Get updated scout data
+    const updatedScout = dbOps.getScoutById(scoutId);
+
+    res.json({
+      message: "Scout updated successfully",
+      scout: updatedScout,
+      changes: result.changes,
+    });
+  } catch (error) {
+    console.error("Update scout error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Partial update (for specific fields)
+app.patch("/api/scouts/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Only admins can update scouts" });
+    }
+
+    const scoutId = parseInt(req.params.id);
+
+    if (isNaN(scoutId) || scoutId <= 0) {
+      return res.status(400).json({ error: "Invalid scout ID" });
+    }
+
+    // Check if scout exists
+    const existingScout = dbOps.getScoutById(scoutId);
+    if (!existingScout) {
+      return res.status(404).json({ error: "Scout not found" });
+    }
+
+    const updateData = req.body;
+
+    // If email is being updated, check if it's available
+    if (updateData.email && updateData.email !== existingScout.email) {
+      const scoutWithEmail = dbOps.findScoutByEmail(updateData.email);
+      if (scoutWithEmail && scoutWithEmail.id !== scoutId) {
+        return res
+          .status(409)
+          .json({ error: "Email already taken by another scout" });
+      }
+    }
+
+    // Merge existing data with update data
+    const mergedData = { ...existingScout, ...updateData };
+
+    const result = dbOps.updateScout(scoutId, mergedData);
+
+    if (result.changes === 0) {
+      return res
+        .status(404)
+        .json({ error: "Scout not found or no changes made" });
+    }
+
+    const updatedScout = dbOps.getScoutById(scoutId);
+
+    res.json({
+      message: "Scout updated successfully",
+      scout: updatedScout,
+      changes: result.changes,
+    });
+  } catch (error) {
+    console.error("Partial update scout error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
