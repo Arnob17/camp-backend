@@ -463,6 +463,180 @@ app.get("/api/food/scout/:scoutId", authenticateToken, async (req, res) => {
   }
 });
 
+app.get("/api/kits/scout/:scoutId", authenticateToken, async (req, res) => {
+  try {
+    const { scoutId } = req.params;
+
+    const kit = dbOps.getKitByScoutId(parseInt(scoutId));
+
+    if (!kit) {
+      return res.status(404).json({
+        error: "Kit not found for this scout",
+        kit: null,
+      });
+    }
+
+    res.json({ kit });
+  } catch (error) {
+    console.error("Get kit error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Get all kits (admin only)
+app.get("/api/kits", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Only admins can view all kits" });
+    }
+
+    const kits = dbOps.getAllKits();
+    const summary = dbOps.getKitsSummary();
+
+    res.json({
+      kits,
+      summary,
+    });
+  } catch (error) {
+    console.error("Get all kits error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Create or update kit for a scout
+app.post("/api/kits/scout/:scoutId", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Only admins can manage kits" });
+    }
+
+    const { scoutId } = req.params;
+    const kitData = req.body;
+
+    // Validate required fields
+    if (!kitData || typeof kitData !== "object") {
+      return res.status(400).json({ error: "Kit data is required" });
+    }
+
+    const result = dbOps.createOrUpdateKit(
+      parseInt(scoutId),
+      kitData,
+      req.user.id
+    );
+
+    const updatedKit = dbOps.getKitByScoutId(parseInt(scoutId));
+
+    res.json({
+      message: "Kit updated successfully",
+      kit: updatedKit,
+      changes: result.changes,
+    });
+  } catch (error) {
+    console.error("Update kit error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Update specific kit item
+app.patch(
+  "/api/kits/scout/:scoutId/item/:item",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      if (req.user.role !== "admin") {
+        return res
+          .status(403)
+          .json({ error: "Only admins can update kit items" });
+      }
+
+      const { scoutId, item } = req.params;
+      const { received } = req.body;
+
+      if (typeof received !== "boolean") {
+        return res
+          .status(400)
+          .json({ error: "Received status is required and must be boolean" });
+      }
+
+      const result = dbOps.updateKitItem(
+        parseInt(scoutId),
+        item,
+        received,
+        req.user.id
+      );
+
+      const updatedKit = dbOps.getKitByScoutId(parseInt(scoutId));
+
+      res.json({
+        message: `${item} status updated successfully`,
+        kit: updatedKit,
+        changes: result.changes,
+      });
+    } catch (error) {
+      console.error("Update kit item error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+// Delete kit for a scout
+app.delete("/api/kits/scout/:scoutId", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Only admins can delete kits" });
+    }
+
+    const { scoutId } = req.params;
+
+    const result = dbOps.deleteKit(parseInt(scoutId));
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: "Kit not found" });
+    }
+
+    res.json({
+      message: "Kit deleted successfully",
+      deletedScoutId: parseInt(scoutId),
+    });
+  } catch (error) {
+    console.error("Delete kit error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Get kit summary (admin only)
+app.get("/api/kits/summary", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res
+        .status(403)
+        .json({ error: "Only admins can view kit summary" });
+    }
+
+    const summary = dbOps.getKitsSummary();
+    const totalScouts = db
+      .prepare("SELECT COUNT(*) as count FROM scouts")
+      .get();
+
+    res.json({
+      summary,
+      totalScouts: totalScouts.count,
+      distributionRate: {
+        tshirt: Math.round((summary.tshirt_count / totalScouts.count) * 100),
+        scarf: Math.round((summary.scarf_count / totalScouts.count) * 100),
+        waggle: Math.round((summary.waggle_count / totalScouts.count) * 100),
+        keychain: Math.round(
+          (summary.keychain_count / totalScouts.count) * 100
+        ),
+        pen: Math.round((summary.pen_count / totalScouts.count) * 100),
+      },
+    });
+  } catch (error) {
+    console.error("Get kit summary error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // Serve React app for all other routes (must be last)
 app.use((req, res, next) => {
   if (req.path.startsWith("/api")) return next(); // skip API
