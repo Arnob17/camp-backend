@@ -171,6 +171,7 @@ const dbOps = {
     SELECT 
       id,
       email,
+      password,
       bsID,
       unitName,
       name,
@@ -269,7 +270,7 @@ const dbOps = {
   },
 
   findScoutByEmail: (email) => {
-    const stmt = db.prepare("SELECT * FROM scouts WHERE email = ?");
+    const stmt = db.prepare("SELECT * FROM scouts WHERE phone = ?");
     return stmt.get(email);
   },
 
